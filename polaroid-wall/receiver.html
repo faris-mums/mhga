@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The wall</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{
+    --paper:#fff;
+    --band:#f4ede4;
+    --ink:#3f3530;
+    --ink-soft:#8a7a70;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:#201d1c; color:var(--ink);
+    font-family:'Avenir Next','Segoe UI',system-ui,-apple-system,sans-serif;
+    overflow:hidden;
+  }
+  .swap{
+    position:fixed; top:16px; right:16px; z-index:5;
+    color:#efe8df; text-decoration:none; font-size:13px;
+    padding:8px 14px; border:1px solid rgba(239,232,223,0.4); border-radius:999px;
+    background:rgba(0,0,0,0.35);
+  }
+  .swap:hover{ border-color:#fff; }
+
+  .wall{ position:fixed; inset:0; display:flex; align-items:center; overflow:hidden; }
+  .track{
+    display:flex; align-items:center; gap:44px; width:max-content;
+    padding:0 40px;
+    animation: drift var(--dur,140s) linear infinite;
+  }
+  @keyframes drift{ from{ transform:translateX(-50%); } to{ transform:translateX(0); } }
+
+  .card{
+    width:200px; flex:none; background:var(--paper);
+    padding:10px 10px 14px; border-radius:4px;
+    box-shadow:0 18px 34px rgba(0,0,0,0.4);
+    transform: rotate(var(--r,0deg));
+    margin-top: var(--dy,0px);
+  }
+  .card img{
+    display:block; width:100%; height:200px; object-fit:cover;
+    background:var(--band); border-radius:2px;
+  }
+  .card figcaption{
+    margin-top:12px; padding:0 4px; display:flex; flex-direction:column; gap:3px;
+    text-align:center; font-family:'Bradley Hand','Lucida Handwriting',cursive;
+  }
+  .card .to{ font-size:16px; color:var(--ink); }
+  .card .msg{ font-size:14px; color:var(--ink-soft); line-height:1.35; }
+
+  .empty{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#efe8df; font-size:18px; text-align:center; padding:24px; line-height:1.6;
+  }
+  .empty a{ color:#ffd8b8; }
+  .empty[hidden], .wall[hidden]{ display:none; }
+</style>
+</head>
+<body>
+  <a class="swap" href="sender.html">+ Take a photo</a>
+  <div class="wall" id="wall">
+    <div class="track" id="track"></div>
+  </div>
+  <p class="empty" id="empty" hidden></p>
+
+  <script src="config.js"></script>
+  <script>
+  (function(){
+    var EP = (window.PHOTO_WALL_CONFIG || {}).endpoint || '';
+    var wall = document.getElementById('wall');
+    var track = document.getElementById('track');
+    var empty = document.getElementById('empty');
+    var signature = '';
+
+    function makeCard(item){
+      var fig = document.createElement('figure');
+      fig.className = 'card';
+      fig.style.setProperty('--r', (Math.random()*10 - 5).toFixed(1) + 'deg');
+      fig.style.setProperty('--dy', Math.round(Math.random()*34) + 'px');
+
+      var img = document.createElement('img');
+      img.src = item.imageUrl;
+      img.alt = '';
+      img.draggable = false;
+
+      var cap = document.createElement('figcaption');
+      if (item.to) {
+        var t = document.createElement('span');
+        t.className = 'to';
+        t.textContent = 'To ' + item.to;
+        cap.appendChild(t);
+      }
+      if (item.message) {
+        var m = document.createElement('span');
+        m.className = 'msg';
+        m.textContent = item.message;
+        cap.appendChild(m);
+      }
+
+      fig.appendChild(img);
+      fig.appendChild(cap);
+      return fig;
+    }
+
+    function render(rows){
+      track.innerHTML = '';
+      if (!rows.length) {
+        empty.hidden = false;
+        empty.innerHTML = 'Nothing yet. <a href="sender.html">Send the first photo</a>.';
+        wall.hidden = true;
+        return;
+      }
+      empty.hidden = true;
+      wall.hidden = false;
+
+      var unit = rows.map(makeCard);
+      unit.forEach(function(n){ track.appendChild(n); });
+
+      var need = window.innerWidth * 1.7;
+      var guard = 0;
+      while (track.scrollWidth < need && guard < 80) {
+        unit.forEach(function(n){ track.appendChild(n.cloneNode(true)); });
+        guard++;
+      }
+
+      var childrenNow = Array.prototype.slice.call(track.children);
+      childrenNow.forEach(function(n){ track.appendChild(n.cloneNode(true)); });
+
+      var setWidth = track.scrollWidth / 2;
+      var dur = Math.max(40, setWidth / 60);
+      wall.style.setProperty('--dur', dur.toFixed(1) + 's');
+    }
+
+    function sig(rows){
+      return rows.map(function(r){
+        return (r.id||'') + (r.imageUrl||'') + (r.message||'') + (r.to||'');
+      }).join('|');
+    }
+
+    function load(){
+      if (!EP) {
+        empty.hidden = false;
+        empty.textContent = 'Add your Apps Script URL to config.js first.';
+        return;
+      }
+      var url = EP + (EP.indexOf('?') < 0 ? '?' : '&') + 't=' + Date.now();
+      fetch(url, { method:'GET', cache:'no-store' })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          var rows = (data && data.rows) ? data.rows : [];
+          var s = sig(rows);
+          if (s !== signature) { signature = s; render(rows); }
+        })
+        .catch(function(){});
+    }
+
+    load();
+    setInterval(load, 30000);
+  })();
+  </script>
+</body>
+</html>
